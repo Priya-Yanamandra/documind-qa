@@ -1,7 +1,6 @@
 import os
 from typing import List
-from google import genai
-
+import google.generativeai as genai
 _MODEL = "models/gemini-embedding-001"
 _client = None
 
