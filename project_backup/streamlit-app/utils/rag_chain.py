@@ -2,18 +2,30 @@ import os
 from typing import List, Dict, Tuple
 import google.generativeai as genai
 
-_GENERATION_MODEL = "models/gemini-2.5-flash"
-_client = None
+_GENERATION_MODEL = "gemini-2.5-flash"
+_configured = False
 
 
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY is not set.")
-        _client = genai.Client(api_key=api_key)
-    return _client
+def _get_api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        return key
+    try:
+        import streamlit as st
+        return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+    raise RuntimeError(
+        "GEMINI_API_KEY not found. Set it as an environment variable "
+        "or add it to Streamlit secrets."
+    )
+
+
+def _configure():
+    global _configured
+    if not _configured:
+        genai.configure(api_key=_get_api_key())
+        _configured = True
 
 
 def build_prompt(
@@ -22,32 +34,43 @@ def build_prompt(
     history: List[Dict[str, str]],
 ) -> str:
     history_text = ""
+
     if history:
         pairs = []
-        msgs = history[-6:]  # last 3 Q&A pairs
+        msgs = history[-6:]
         i = 0
+
         while i < len(msgs) - 1:
             if msgs[i]["role"] == "user" and msgs[i + 1]["role"] == "assistant":
-                pairs.append(f"User: {msgs[i]['content']}\nAssistant: {msgs[i+1]['content']}")
+                pairs.append(
+                    f"User: {msgs[i]['content']}\nAssistant: {msgs[i+1]['content']}"
+                )
                 i += 2
             else:
                 i += 1
+
         if pairs:
             history_text = "\n\n".join(pairs)
 
     context_text = "\n\n---\n\n".join(context_chunks)
 
-    prompt = f"""You are a helpful document Q&A assistant. Answer the question based ONLY on the provided document context.
-If the answer is not found in the context, say "I couldn't find that information in the document."
-Be concise, accurate, and cite which part of the document supports your answer when possible.
+    prompt = f"""You are a helpful document Q&A assistant.
+Answer the question based ONLY on the provided document context.
+
+If the answer is not found in the context, say:
+"I couldn't find that information in the document."
+
+Be concise and accurate.
 
 DOCUMENT CONTEXT:
 {context_text}
 """
+
     if history_text:
         prompt += f"\nCONVERSATION HISTORY:\n{history_text}\n"
 
     prompt += f"\nQUESTION: {question}\n\nANSWER:"
+
     return prompt
 
 
@@ -56,9 +79,14 @@ def generate_answer(
     context_chunks: List[str],
     history: List[Dict[str, str]],
 ) -> Tuple[str, str]:
-    """Returns (answer, prompt_used)."""
-    client = _get_client()
+    _configure()
+
     prompt = build_prompt(question, context_chunks, history)
+
+    model = genai.GenerativeModel(_GENERATION_MODEL)
+
     response = model.generate_content(prompt)
+
     answer = response.text.strip()
+
     return answer, prompt
