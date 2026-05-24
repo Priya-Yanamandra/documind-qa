@@ -85,7 +85,15 @@ def generate_answer(
 
     model = genai.GenerativeModel(_GENERATION_MODEL)
 
-    response = model.generate_content(prompt)
+    response = model.generate_content(
+    prompt,
+    generation_config=genai.types.GenerationConfig(
+        temperature=0.1,
+        top_p=0.8,
+        top_k=20,
+        max_output_tokens=512,
+    ),
+)
 
     answer = response.text.strip()
 
