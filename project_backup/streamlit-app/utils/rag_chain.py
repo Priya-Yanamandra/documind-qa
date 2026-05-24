@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict, Tuple
 import google.generativeai as genai
-from google.genai import types
 
 _GENERATION_MODEL = "models/gemini-2.5-flash"
 _client = None
@@ -60,13 +59,6 @@ def generate_answer(
     """Returns (answer, prompt_used)."""
     client = _get_client()
     prompt = build_prompt(question, context_chunks, history)
-    response = client.models.generate_content(
-        model=_GENERATION_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            max_output_tokens=1024,
-        ),
-    )
+    response = model.generate_content(prompt)
     answer = response.text.strip()
     return answer, prompt
