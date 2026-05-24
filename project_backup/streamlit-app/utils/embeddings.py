@@ -1,38 +1,55 @@
 import os
 from typing import List
 import google.generativeai as genai
+
 _MODEL = "models/gemini-embedding-001"
-_client = None
+_configured = False
 
 
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
-        _client = genai.Client(api_key=api_key)
-    return _client
+def _get_api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        return key
+    try:
+        import streamlit as st
+        return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+    raise RuntimeError(
+        "GEMINI_API_KEY not found. Set it as an environment variable "
+        "or add it to Streamlit secrets."
+    )
+
+
+def _configure():
+    global _configured
+    if not _configured:
+        genai.configure(api_key=_get_api_key())
+        _configured = True
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
-    """Embed a list of texts. Returns list of embedding vectors."""
-    client = _get_client()
+    _configure()
     embeddings = []
+
     for text in texts:
-        result = client.models.embed_content(
+        response = genai.embed_content(
             model=_MODEL,
-            contents=text,
+            content=text,
+            task_type="retrieval_document",
         )
-        embeddings.append(result.embeddings[0].values)
+        embeddings.append(response["embedding"])
+
     return embeddings
 
 
 def embed_query(query: str) -> List[float]:
-    """Embed a single query string."""
-    client = _get_client()
-    result = client.models.embed_content(
+    _configure()
+
+    response = genai.embed_content(
         model=_MODEL,
-        contents=query,
+        content=query,
+        task_type="retrieval_query",
     )
-    return result.embeddings[0].values
+
+    return response["embedding"]
